@@ -1,49 +1,31 @@
 provider "aws" {
-    // provider = import library
-    // AWS User needs necessary permissions! like AmazonEC2FullAccess
-  region = "ap-southeast-1"
+    region = "eu-west-3"
 }
 
-variable "cidr_block" {
-  description = "cidr blocks and name for vpc and subnet"
-  type = list(object({
-    cidr_block = string
-    name = string
-  }))
+resource "aws_vpc" "myapp-vpc" {
+    cidr_block = var.vpc_cidr_block
+    tags = {
+        Name = "${var.env_prefix}-vpc"
+    }
 }
 
-resource "aws_vpc" "development-vpc" {
-    //resource/data = function call of library
-  cidr_block = var.cidr_block[0].cidr_block
-  tags = {
-    Name: var.cidr_block[0].name,
-    vpc_env: "dev"
-  }
+module "myapp-subnet" {
+    source = "./modules/subnet"
+    subnet_cidr_block = var.subnet_cidr_block
+    avail_zone = var.avail_zone
+    env_prefix = var.env_prefix
+    vpc_id = aws_vpc.myapp-vpc.id
+    default_route_table_id = aws_vpc.myapp-vpc.default_route_table_id
 }
 
-resource "aws_subnet" "dev-subnet-1" {
-  vpc_id = aws_vpc.development-vpc.id
-  cidr_block = var.cidr_block[1].cidr_block
-  availability_zone = "ap-southeast-1a"
-  tags = {
-    Name: var.cidr_block[1].name
-  }
-}
-
-variable "avail_zone" {
-  
-}
-
-data "aws_vpc" "existing_vpc" {
-     //arguments = parameters of function
-  default = true
-}
-
-resource "aws_subnet" "dev-subnet-2" {
-  vpc_id = data.aws_vpc.existing_vpc.id
-  cidr_block = "172.31.48.0/20"
-  availability_zone = var.avail_zone
-  tags = {
-    Name: "subnet-2-default"
-  }
+module "myapp-server" {
+    source = "./modules/webserver"
+    vpc_id = aws_vpc.myapp-vpc.id
+    my_ip = var.my_ip
+    env_prefix = var.env_prefix
+    image_name = var.image_name
+    public_key_location = var.public_key_location
+    instance_type = var.instance_type
+    subnet_id = module.myapp-subnet.subnet.id
+    avail_zone = var.avail_zone
 }
